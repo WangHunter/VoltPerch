@@ -1,0 +1,57 @@
+VoltPerch third-party notices
+
+VoltPerch uses a native C# implementation of known device power-query protocols.
+The following open-source projects were consulted to identify packet formats,
+device IDs, report offsets and compatibility behavior. VoltPerch is not an
+official product of these projects or of the device manufacturers.
+
+1. BatteryMonitor — JKWTCN
+   https://github.com/JKWTCN/BatteryMonitor
+   Reference revision: 50f628c1ae1ced004e9fa03737cee9d6a561d80e
+   Relevant source: src/providers/hid/VgnHidProvider.cpp
+   License: MIT; full upstream license in licenses/BatteryMonitor-MIT.txt.
+
+2. HaloBattery — Halo Battery contributors
+   https://github.com/HeyOkay/HaloBattery
+   Reference revision: 73e229cbee2e97fad659fcd96c78afdfa78488fb
+   Relevant source: providers/atk_keyboard.py and providers/bluetooth.py
+   License: MIT; full upstream license in licenses/HaloBattery-MIT.txt.
+   HaloBattery UI assets and its bundled third-party icon sets are not included.
+
+3. rivalcfg — Fabien LOISON (FLOZz) and contributors
+   https://github.com/flozz/rivalcfg
+   Reference revision: 779ea52c68cbf8d21234d9e0d81718225f680819
+   Relevant source: rivalcfg/devices/rival650.py
+   License: WTFPL version 2; full upstream license in licenses/rivalcfg-WTFPL.txt.
+
+4. Microsoft .NET runtime and Windows Desktop runtime
+   The self-contained Windows x64 distribution includes Microsoft .NET runtime
+   components. VoltPerch does not claim authorship of these components.
+   https://github.com/dotnet/runtime
+   https://github.com/dotnet/wpf
+   https://github.com/dotnet/winforms
+   Runtime package version used for this build: 10.0.15.
+   License texts copied from the actual runtime packages:
+     licenses/dotnet-runtime-LICENSE.txt
+     licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt
+     licenses/windowsdesktop-runtime-LICENSE.txt
+   These files preserve their original notices and license terms.
+
+The VGN/ATK official browser driver was also consulted as protocol evidence;
+its application source, assets and binaries are not bundled in VoltPerch.
+
+The application device glyphs are locally drawn WPF vectors. Product names are
+used only to identify compatible hardware and do not imply endorsement.
+
+The application icon was generated with OpenAI's image generation tool and
+packaged as a multi-resolution Windows icon. Its prompt and source artwork are
+included in src/BatteryDesk/Assets. The tray symbol is drawn from live state in
+code; it is not a manufacturer logo or a copied upstream UI asset.
+
+5. Microsoft Windows SDK for .NET
+   Windows.Gaming.Input projection and WinRT support from
+   Microsoft.Windows.SDK.NET.Ref version 10.0.19041.57.
+   Package: https://www.nuget.org/packages/Microsoft.Windows.SDK.NET.Ref/10.0.19041.57
+   SDK terms: https://aka.ms/WinSDKLicenseURL
+   The application calls the Windows battery report APIs; controller capacity
+   ratios are explicitly presented as system estimates, not precise measurements.

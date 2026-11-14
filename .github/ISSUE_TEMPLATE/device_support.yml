@@ -1,0 +1,74 @@
+name: Device support
+description: Request or document support for a peripheral and connection mode.
+title: "[Device support]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Support is specific to a device, firmware and transport. A working wired connection does not establish wireless compatibility. Share only read-only observations; do not run unknown firmware or configuration commands. Remove MAC addresses, serial numbers and personal device names from evidence.
+  - type: input
+    id: model
+    attributes:
+      label: Manufacturer and exact model
+      placeholder: Manufacturer and model
+    validations:
+      required: true
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Connection mode
+      options:
+        - Bluetooth
+        - USB cable
+        - Proprietary wireless receiver
+        - Xbox Wireless Adapter
+        - Other or unknown
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware and hardware revision
+      description: Optional. Do not include a device serial number.
+  - type: input
+    id: usb_ids
+    attributes:
+      label: USB vendor and product IDs
+      description: Optional VID/PID only, if applicable. Do not paste a full device instance path or MAC address.
+      placeholder: VID:PID
+  - type: input
+    id: environment
+    attributes:
+      label: Windows and VoltPerch versions
+      description: Include the Windows build and the VoltPerch release or source commit.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior
+      description: Does the device appear? Is the connection confirmed? Is battery information unavailable, cached, estimated or shown as a level?
+    validations:
+      required: true
+  - type: textarea
+    id: other_software
+    attributes:
+      label: Battery information in Windows or vendor software
+      description: State which application shows a reading and whether it describes a percentage or a coarse level. A screenshot is optional; redact personal details.
+  - type: textarea
+    id: sources
+    attributes:
+      label: Protocol or open-source references
+      description: Link to original protocol documentation or source code, with its license if known. Leave blank if unknown.
+  - type: textarea
+    id: validation
+    attributes:
+      label: Hardware checks available
+      description: List which read-only checks you can perform, such as reconnecting, waking the device or observing charging. Clearly identify anything not tested.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed personal identifiers and did not attach an unreviewed diagnostic capture.
+          required: true

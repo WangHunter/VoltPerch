@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a reproducible problem in VoltPerch.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues before submitting. Remove personal device names, MAC addresses, serial numbers, local usernames and identifying paths from screenshots or logs. Never attach an unreviewed data folder.
+  - type: input
+    id: version
+    attributes:
+      label: VoltPerch version
+      description: Include the release version or source commit and whether this is a portable build.
+      placeholder: Version or commit
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and build
+      description: Also mention the display scale if the issue is visual.
+      placeholder: Windows version, build, display scale
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device model and connection mode
+      description: Use model names, not personal device names. Include firmware if known. Write not applicable for a general UI issue.
+      placeholder: Model; Bluetooth, USB cable, or wireless receiver
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Describe the smallest repeatable sequence, including wake, reconnect or charging steps where relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the connection state and whether the reading is current, estimated, a coarse level, unavailable or cached. Do not substitute guessed battery percentages.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted evidence
+      description: Optional screenshots, error text and logs. Include the selected app language and theme for UI problems.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: I reviewed attachments and removed personal identifiers and private paths.
+          required: true

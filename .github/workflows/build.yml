@@ -1,0 +1,37 @@
+name: Build and verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-dotnet@v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Run isolated checks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in @('CoreChecks', 'WakeChecks', 'XInputChecks', 'WgiChecks', 'BluetoothChecks', 'LocalizationChecks')) {
+            dotnet run --project "tools/$name/$name.csproj" -c Release
+            if ($LASTEXITCODE -ne 0) { throw "$name failed" }
+          }
+      - name: Package portable Windows app
+        shell: pwsh
+        run: ./tools/package.ps1
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: VoltPerch-windows-x64
+          path: |
+            artifacts/release/*.zip
+            artifacts/release/*.sha256
+          if-no-files-found: error

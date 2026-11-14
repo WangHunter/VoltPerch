@@ -1,0 +1,17 @@
+VoltPerch application icon (original working name: BatteryDesk)
+Created: 2026-11-14
+Method: built-in image_gen (transparent background)
+Source: app-imagegen.png
+Windows package: app.ico (16, 20, 24, 32, 40, 48, 64, 128, 256 px)
+The tray uses a transparent, taskbar-aware battery silhouette rendered from
+live battery data. It retains charging, low, unknown and estimated states.
+Numeric tray rendering was removed after user review.
+
+Final generation prompt:
+Use case: logo-brand
+Asset type: production Windows desktop application icon, BatteryDesk battery monitor.
+Primary request: design one polished modern application icon with restrained Apple-like precision. A bold white horizontal battery silhouette with a clearly separated right terminal, thick rounded outline, and a single solid charge fill occupying about two thirds of its interior. Place it on one rounded-square cobalt/azure blue tile with a very subtle vertical gradient, gently rounded corners, optically balanced, completely front-facing.
+Composition: square canvas, one icon only, tile fills 94% of canvas width, battery occupies 76% of tile width and 45% of tile height. Thick simple shapes that remain readable at 16px. No tiny marks. All of the space outside the tile must be genuinely transparent, with no external shadow.
+Palette: azure blue top, cobalt blue bottom, pure white battery.
+Style: crisp premium app artwork, minimal, clean soft edges, no glass glare, no decorative light effects. A single finished usable icon asset rather than a mockup.
+Constraints: no lettering, no digits, no labels, no lightning bolt, no device pictures, no perspective, no border around the canvas, no extra icons, no watermark.

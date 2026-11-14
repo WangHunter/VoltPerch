@@ -4,6 +4,8 @@
 
 # VoltPerch
 
+[简体中文](README.zh-CN.md)
+
 A lightweight Windows app for checking peripheral connections and battery levels from your desktop or system tray.
 
 VoltPerch brings supported keyboards, mice, controllers and Bluetooth devices into one list. It keeps the last valid battery reading when a device disconnects and clearly marks cached readings and system estimates.

@@ -2,6 +2,27 @@
 
 Notable changes to VoltPerch are recorded here. Hardware support remains subject to the compatibility limits in [README.md](README.md).
 
+## 0.3.0 - 2026-11-16
+
+### Added
+
+- Passive Bluetooth LE advertisement support for AirPods battery broadcasts, including left earbud, right earbud and case values where reported.
+- Separate left, right and case readings in the device list and tray panel, with per-part charging states when fresh.
+- The AirPods detail summary now identifies the lower earbud reading; stale component values remain visible without claiming an old charging state.
+- AirPods battery detail labels for approximate 10% steps, charging state and the last broadcast time.
+- AirPods broadcast and cache policy checks, including preserving the last reading after disconnect.
+
+### Changed
+
+- Bluetooth LE scanning starts asynchronously so a slow or unavailable adapter does not block the app window.
+- Compatibility documentation now distinguishes AirPods advertisements from generic BLE/GATT battery services.
+
+### Limitations
+
+- AirPods broadcasts expose coarse levels and no stable device identity. VoltPerch uses the strongest recent nearby signal, so another pair nearby may be matched.
+- A battery broadcast is typically available with the case open or earbuds out. Cached readings remain visible after a disconnect and are marked as not live.
+- Generic BLE/GATT battery services and unrelated proprietary receiver protocols remain unsupported.
+
 ## 0.2.0 - 2026-11-14
 
 ### Added

@@ -25,6 +25,7 @@ public sealed class DeviceMonitor : IDisposable
     private string _lastHidSignature = "";
     private string? _lastXInputSignature = "";
     private string? _lastWgiSignature = "";
+    private string? _lastAirPodsSignature;
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     public IReadOnlyList<DeviceSnapshot> Devices { get; private set; }
     public IReadOnlyList<RemovedDevice> RemovedDevices { get; private set; }
@@ -51,30 +52,37 @@ public sealed class DeviceMonitor : IDisposable
         _identities = new EndpointIdentityMap(Read<Dictionary<string, string>>("identities.json"));
     }
 
-    public void Start() => _loop ??= Task.Run(async () =>
+    public void Start()
     {
-        while (!_stop.IsCancellationRequested)
+        AirPodsAdvertisementProvider.Start();
+        _loop ??= Task.Run(async () =>
         {
-            try
+            while (!_stop.IsCancellationRequested)
             {
-                var endpoints = HidNative.Enumerate();
-                var signature = HidSignature(endpoints);
-                var xInputSignature = ReadXInputSignature();
-                var wgiSignature = ReadWgiSignature();
-                if (signature != _lastHidSignature || xInputSignature != _lastXInputSignature || wgiSignature != _lastWgiSignature
-                    || DateTimeOffset.UtcNow - _lastRefresh >= TimeSpan.FromSeconds(Settings.RefreshSeconds))
-                    await RefreshCoreAsync(endpoints, sampledConnections: (signature, xInputSignature, wgiSignature)).ConfigureAwait(false);
-                await Task.Delay(3000, _stop.Token).ConfigureAwait(false);
+                try
+                {
+                    AirPodsAdvertisementProvider.Start();
+                    var endpoints = HidNative.Enumerate();
+                    var signature = HidSignature(endpoints);
+                    var xInputSignature = ReadXInputSignature();
+                    var wgiSignature = ReadWgiSignature();
+                    var airPodsSignature = AirPodsAdvertisementProvider.Signature;
+                    if (signature != _lastHidSignature || xInputSignature != _lastXInputSignature || wgiSignature != _lastWgiSignature
+                        || airPodsSignature != _lastAirPodsSignature
+                        || DateTimeOffset.UtcNow - _lastRefresh >= TimeSpan.FromSeconds(Settings.RefreshSeconds))
+                        await RefreshCoreAsync(endpoints, sampledConnections: (signature, xInputSignature, wgiSignature, airPodsSignature)).ConfigureAwait(false);
+                    await Task.Delay(3000, _stop.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex)
+                {
+                    StatusText = "Detection failed; try Refresh: " + ex.Message;
+                    Updated?.Invoke(this, EventArgs.Empty);
+                    await Task.Delay(5000, _stop.Token).ConfigureAwait(false);
+                }
             }
-            catch (OperationCanceledException) { break; }
-            catch (Exception ex)
-            {
-                StatusText = "Detection failed; try Refresh: " + ex.Message;
-                Updated?.Invoke(this, EventArgs.Empty);
-                await Task.Delay(5000, _stop.Token).ConfigureAwait(false);
-            }
-        }
-    });
+        });
+    }
 
     public Task RefreshAsync() => Task.Run(() => RefreshCoreAsync(null));
 
@@ -200,7 +208,7 @@ public sealed class DeviceMonitor : IDisposable
     }
 
     private async Task RefreshCoreAsync(IReadOnlyList<HidEndpoint>? endpoints, bool waitForKeyboard = false,
-        (string Hid, string? XInput, string? Wgi)? sampledConnections = null)
+        (string Hid, string? XInput, string? Wgi, string? AirPods)? sampledConnections = null)
     {
         if (waitForKeyboard) await _refreshGate.WaitAsync(_stop.Token).ConfigureAwait(false);
         else if (!await _refreshGate.WaitAsync(0).ConfigureAwait(false)) return;
@@ -212,11 +220,14 @@ public sealed class DeviceMonitor : IDisposable
             endpoints ??= HidNative.Enumerate();
             // Save this pre-read sample, not a second sample after the queries: a connection
             // change during a read must still trigger another refresh on the next scan.
-            (string Hid, string? XInput, string? Wgi) connections = sampledConnections
-                ?? (HidSignature(endpoints), ReadXInputSignature(), ReadWgiSignature());
+            (string Hid, string? XInput, string? Wgi, string? AirPods) connections = sampledConnections
+                ?? (HidSignature(endpoints), ReadXInputSignature(), ReadWgiSignature(), AirPodsAdvertisementProvider.Signature);
             var observations = new List<DeviceObservation>(await TargetHidProvider.ReadAsync(endpoints, _identities).ConfigureAwait(false));
             string? bluetoothWarning = null;
-            try { observations.AddRange(BluetoothProvider.Read()); }
+            try
+            {
+                observations.AddRange(AirPodsAdvertisementProvider.Apply(BluetoothProvider.Read()));
+            }
             catch (Exception ex)
             {
                 // Bluetooth being disabled/unavailable must not invalidate USB/HID readings.
@@ -273,6 +284,7 @@ public sealed class DeviceMonitor : IDisposable
             _lastHidSignature = connections.Hid;
             _lastXInputSignature = connections.XInput;
             _lastWgiSignature = connections.Wgi;
+            _lastAirPodsSignature = connections.AirPods;
             _lastRefresh = now;
             Write("devices.json", Devices);
             var notifications = new List<DeviceSnapshot>();
@@ -341,5 +353,5 @@ public sealed class DeviceMonitor : IDisposable
             File.Move(path + ".tmp", path, true);
         }
     }
-    public void Dispose() { _stop.Cancel(); }
+    public void Dispose() { _stop.Cancel(); AirPodsAdvertisementProvider.Stop(); }
 }

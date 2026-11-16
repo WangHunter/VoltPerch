@@ -58,6 +58,15 @@ internal static class UiHelpers
     };
     internal static string BatteryCaption(DeviceSnapshot d, AppSettings settings)
     {
+        if (d.BatteryComponents != null)
+        {
+            if (!HasRecentAirPodsBroadcast(d) && !d.IsLive)
+                return T(d.Connection == LinkState.Disconnected ? "Last AirPods broadcast · offline" : "Last AirPods broadcast · not live");
+            if (!HasRecentAirPodsBroadcast(d)) return T("AirPods component values · last broadcast");
+            if (!d.IsLive && d.Connection == LinkState.Disconnected)
+                return T("Nearby AirPods broadcast · approx. 10% steps");
+            return T("AirPods component broadcast · approx. 10% steps");
+        }
         if ((d.BatteryPercent.HasValue || d.BatteryLevel.HasValue) && !d.IsLive) return T(d.BatteryIsEstimated ? "Last estimate · offline" : "Last reading · offline");
         if (d.BatteryPercent.HasValue && d.BatteryIsEstimated)
             return T(d.IsCharging == true ? "Estimate · charging" : Low(d, settings) ? "⚠ Low estimate" : "System estimate");
@@ -73,6 +82,84 @@ internal static class UiHelpers
         if (d.IsCharging == true) return T("Charging");
         if (Low(d, settings)) return T("⚠ Low battery");
         return T(d.IsCharging == false ? "Not charging" : "Current battery");
+    }
+    internal static bool HasRecentAirPodsBroadcast(DeviceSnapshot d) =>
+        d.BatteryComponents?.SeenUtc is DateTimeOffset seen && DateTimeOffset.UtcNow - seen <= TimeSpan.FromSeconds(60);
+    internal static bool HasSeparateAirPodsComponents(DeviceSnapshot d) =>
+        d.BatteryComponents is { SingleBattery: false };
+    internal static string BatteryComponentValueText(int? percent) => percent is int value ? "≈" + value + "%" : "—";
+    internal static string BatteryComponentText(int? percent, bool charging, bool isFresh = true)
+    {
+        if (percent is not int) return "—";
+        return BatteryComponentValueText(percent) + (isFresh ? " · " + T(charging ? "Charging" : "Not charging") : "");
+    }
+    internal static string BatteryAccessibilityText(DeviceSnapshot d, AppSettings settings)
+    {
+        if (d.BatteryComponents is not { SingleBattery: false } components)
+            return BatteryText(d) + ", " + BatteryCaption(d, settings);
+        var fresh = HasRecentAirPodsBroadcast(d);
+        return string.Join("; ", new[]
+        {
+            T("Left earbud") + ": " + BatteryComponentText(components.Left, components.LeftCharging, fresh),
+            T("Right earbud") + ": " + BatteryComponentText(components.Right, components.RightCharging, fresh),
+            T("Charging case") + ": " + BatteryComponentText(components.Case, components.CaseCharging, fresh),
+            BatteryCaption(d, settings)
+        });
+    }
+    internal static UIElement AirPodsComponentPanel(DeviceSnapshot d, double width, double labelSize,
+        double valueSize, double statusSize, double captionSize, AppSettings settings, bool compactCaption = false)
+    {
+        var components = d.BatteryComponents ?? throw new ArgumentException("AirPods battery components are required", nameof(d));
+        var fresh = HasRecentAirPodsBroadcast(d);
+        var row = new Grid { Width = width, HorizontalAlignment = HorizontalAlignment.Right };
+        foreach (var _ in new[] { 0, 1, 2 }) row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        AddComponent(row, 0, "Left (short)", components.Left, components.LeftCharging, d, fresh, labelSize, valueSize, statusSize, settings);
+        AddComponent(row, 1, "Right (short)", components.Right, components.RightCharging, d, fresh, labelSize, valueSize, statusSize, settings);
+        AddComponent(row, 2, "Case (short)", components.Case, components.CaseCharging, d, fresh, labelSize, valueSize, statusSize, settings);
+        var panel = new StackPanel { Width = width, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        panel.Children.Add(row);
+        var captionText = compactCaption ? BatteryCompactCaption(d, settings) : BatteryCaption(d, settings);
+        var caption = Text(captionText, captionSize, "MutedBrush");
+        caption.TextAlignment = TextAlignment.Center;
+        caption.TextWrapping = System.Windows.TextWrapping.NoWrap;
+        caption.TextTrimming = TextTrimming.CharacterEllipsis;
+        caption.ToolTip = BatteryCaption(d, settings);
+        caption.Margin = new Thickness(0, 2, 0, 0);
+        panel.Children.Add(caption);
+        return panel;
+    }
+    private static void AddComponent(Grid row, int column, string labelKey, int? percent, bool charging,
+        DeviceSnapshot device, bool fresh, double labelSize, double valueSize, double statusSize, AppSettings settings)
+    {
+        var cell = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var label = Text(T(labelKey), labelSize, "MutedBrush");
+        label.TextAlignment = TextAlignment.Center;
+        label.TextWrapping = System.Windows.TextWrapping.NoWrap;
+        cell.Children.Add(label);
+        var valueColor = !fresh ? "MutedBrush" : percent is int value && value <= settings.LowBatteryThreshold ? "LowBrush" : "TextBrush";
+        var valueText = Text(BatteryComponentValueText(percent), valueSize, valueColor);
+        valueText.FontWeight = FontWeights.SemiBold;
+        valueText.TextAlignment = TextAlignment.Center;
+        valueText.TextWrapping = System.Windows.TextWrapping.NoWrap;
+        cell.Children.Add(valueText);
+        if (fresh && percent.HasValue)
+        {
+            var status = Text(T(charging ? "Charging" : "Not charging"), statusSize, charging ? "GoodBrush" : "MutedBrush");
+            status.TextAlignment = TextAlignment.Center;
+            status.TextWrapping = System.Windows.TextWrapping.NoWrap;
+            cell.Children.Add(status);
+        }
+        Grid.SetColumn(cell, column);
+        row.Children.Add(cell);
+    }
+    private static string BatteryCompactCaption(DeviceSnapshot d, AppSettings settings)
+    {
+        if (d.BatteryComponents is null) return BatteryCaption(d, settings);
+        var fresh = HasRecentAirPodsBroadcast(d);
+        if (!fresh) return d.IsLive ? T("Components cached") : T("Not live");
+        return !d.IsLive && d.Connection == LinkState.Disconnected
+            ? T("Nearby · approx. 10%")
+            : T("Approx. 10% steps");
     }
     internal static TextBlock Text(string text, double size = 14, string? brush = null)
     {

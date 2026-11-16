@@ -1,12 +1,15 @@
 param(
     [string]$Dotnet = 'dotnet',
-    [string]$Version = '0.2.0'
+    [string]$Version = '0.3.0',
+    [switch]$NoRestore
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $publish = Join-Path $projectRoot 'artifacts\voltperch-publish'
 $release = Join-Path $projectRoot 'artifacts\release'
-& $Dotnet publish (Join-Path $projectRoot 'src\BatteryDesk\BatteryDesk.csproj') -c Release -r win-x64 --self-contained true -o $publish
+$publishArgs = @('publish', (Join-Path $projectRoot 'src\BatteryDesk\BatteryDesk.csproj'), '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true', '-o', $publish)
+if ($NoRestore) { $publishArgs += '--no-restore' }
+& $Dotnet @publishArgs
 if ($LASTEXITCODE -ne 0) { throw 'Publishing failed' }
 Get-ChildItem -LiteralPath $publish -Filter '*.pdb' -File | Remove-Item
 if (Test-Path -LiteralPath (Join-Path $publish 'data')) { throw 'Refusing to package a directory containing user data' }

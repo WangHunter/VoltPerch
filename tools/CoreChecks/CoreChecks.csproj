@@ -11,5 +11,6 @@
     <Compile Include="../../src/BatteryDesk/Hardware/HidNative.cs" Link="Hardware/HidNative.cs" />
     <Compile Include="../../src/BatteryDesk/Hardware/TargetHidProvider.cs" Link="Hardware/TargetHidProvider.cs" />
     <Compile Include="../../src/BatteryDesk/Hardware/EndpointIdentityMap.cs" Link="Hardware/EndpointIdentityMap.cs" />
+    <Compile Include="../../src/BatteryDesk/Hardware/AirPodsAdvertisementParser.cs" Link="Hardware/AirPodsAdvertisementParser.cs" />
   </ItemGroup>
 </Project>

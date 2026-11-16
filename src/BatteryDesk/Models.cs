@@ -6,15 +6,21 @@ public enum DeviceKind { Keyboard, Mouse, Headphones, Controller, Other }
 public enum LinkState { Connected, Disconnected, Unknown }
 public enum BatteryLevel { Empty, Low, Medium, Full }
 
+public sealed record BatteryComponents(int? Left, int? Right, int? Case,
+    bool LeftCharging, bool RightCharging, bool CaseCharging, bool SingleBattery = false,
+    DateTimeOffset? SeenUtc = null);
+
 public sealed record DeviceSnapshot(
     string Id, string Name, DeviceKind Kind, string Transport,
     LinkState Connection, int? BatteryPercent, bool? IsCharging,
     bool IsLive, DateTimeOffset? LastSeenUtc, string Message, string Provider,
-    BatteryLevel? BatteryLevel = null, bool BatteryIsEstimated = false);
+    BatteryLevel? BatteryLevel = null, bool BatteryIsEstimated = false,
+    BatteryComponents? BatteryComponents = null);
 
 public sealed record DeviceObservation(string Id, string Name, DeviceKind Kind, string Transport,
     LinkState Connection, int? CurrentBattery, bool? IsCharging, string Message, string Provider,
-    BatteryLevel? CurrentBatteryLevel = null, bool CurrentBatteryIsEstimated = false);
+    BatteryLevel? CurrentBatteryLevel = null, bool CurrentBatteryIsEstimated = false,
+    BatteryComponents? BatteryComponents = null);
 
 public sealed record RemovedDevice(string Id, string Name, DeviceKind Kind, string Transport);
 

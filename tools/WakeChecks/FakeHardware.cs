@@ -17,6 +17,13 @@ public static class BluetoothProvider
     public static Func<IReadOnlyList<DeviceObservation>> Query = () => Array.Empty<DeviceObservation>();
     public static IReadOnlyList<DeviceObservation> Read() => Query();
 }
+public static class AirPodsAdvertisementProvider
+{
+    public static string? Signature => null;
+    public static void Start() { }
+    public static void Stop() { }
+    public static IReadOnlyList<DeviceObservation> Apply(IReadOnlyList<DeviceObservation> observations) => observations;
+}
 public static class XInputProvider
 {
     public static Func<IReadOnlyList<HidEndpoint>, IReadOnlyList<DeviceObservation>> Query = _ => Array.Empty<DeviceObservation>();

@@ -20,6 +20,20 @@ byte[] Vgn(int percent, int charge = 0)
     return bytes;
 }
 
+byte[] AirPodsPacket(int modelId = 0x0120, int firstLevel = 6, int secondLevel = 3,
+    int caseLevel = 5, int chargingFlags = 7, bool flip = true)
+{
+    var bytes = new byte[27];
+    bytes[0] = 0x07;
+    bytes[1] = 25;
+    bytes[3] = (byte)(modelId >> 8);
+    bytes[4] = (byte)modelId;
+    bytes[5] = flip ? (byte)0 : (byte)0x20;
+    bytes[6] = (byte)((firstLevel << 4) | secondLevel);
+    bytes[7] = (byte)((chargingFlags << 4) | caseLevel);
+    return bytes;
+}
+
 DeviceSnapshot Live(int percent = 79, string id = "keyboard", bool charging = false) =>
     new(id, id, DeviceKind.Keyboard, "2.4 GHz", LinkState.Connected, percent, charging,
         true, now.AddHours(-1), "Fresh response", "test");
@@ -555,6 +569,73 @@ Check("Without usable serial, full normalized path defines endpoint identity", (
     var id = identities.Resolve("keyboard", Endpoint("PORT-A", "000000"));
     Require(identities.Resolve("keyboard", Endpoint("port-a", "000000")) == id, "Path letter case changed identity");
     Require(identities.Resolve("keyboard", Endpoint("port-b", "000000")) != id, "Different no-serial ports unexpectedly shared identity");
+});
+
+Check("AirPods advertisement decodes left, right, case and charging flags", () =>
+{
+    var reading = AirPodsAdvertisementParser.Parse(AirPodsPacket(), -45, now);
+    if (reading is null) throw new InvalidOperationException("AirPods packet was rejected");
+    Require(reading is { Left: 60, Right: 30, Case: 50, LeftCharging: true,
+        RightCharging: true, CaseCharging: true, SingleBattery: false }, "AirPods components decoded incorrectly");
+    Require(reading.SummaryPercent == 30 && reading.SummaryCharging == true,
+        "AirPods summary did not use the lower earbud reading");
+});
+Check("AirPods side flip changes component mapping", () =>
+{
+    var reading = AirPodsAdvertisementParser.Parse(AirPodsPacket(chargingFlags: 1, flip: false), -45, now);
+    Require(reading is { Left: 30, Right: 60, LeftCharging: true, RightCharging: false },
+        "AirPods flip flag mapped sides or charging incorrectly");
+});
+Check("AirPods Max advertisement decodes its single battery", () =>
+{
+    var reading = AirPodsAdvertisementParser.Parse(AirPodsPacket(modelId: 0x0A20,
+        firstLevel: 2, secondLevel: 4, caseLevel: 0, chargingFlags: 1), -45, now);
+    Require(reading is { Left: 40, Right: null, Case: null, SingleBattery: true, LeftCharging: true }
+        && reading.SummaryPercent == 40, "AirPods Max battery decoded incorrectly");
+});
+Check("AirPods advertisement rejects malformed packets and weak signals", () =>
+{
+    var packet = AirPodsPacket();
+    Require(AirPodsAdvertisementParser.Parse(packet, -76, now) is null, "Weak advertisement accepted");
+    Require(AirPodsAdvertisementParser.Parse(packet[..26], -45, now) is null, "Truncated advertisement accepted");
+    var wrongType = (byte[])packet.Clone();
+    wrongType[0] = 0x08;
+    Require(AirPodsAdvertisementParser.Parse(wrongType, -45, now) is null, "Unrelated advertisement accepted");
+    var wrongLength = (byte[])packet.Clone();
+    wrongLength[1] = 24;
+    Require(AirPodsAdvertisementParser.Parse(wrongLength, -45, now) is null, "Wrong packet length accepted");
+});
+Check("AirPods unknown level nibble is not converted to zero", () =>
+{
+    var reading = AirPodsAdvertisementParser.Parse(AirPodsPacket(firstLevel: 15, secondLevel: 4), -45, now);
+    Require(reading is { Left: null, Right: 40, Case: 50 } && AirPodsAdvertisementParser.DecodeLevel(15) is null,
+        "Unknown battery nibble became a percentage");
+});
+Check("Fresh AirPods nearby reading is retained without claiming a PC connection", () =>
+{
+    var components = new BatteryComponents(60, 60, 60, true, false, false, SeenUtc: now);
+    var observation = new DeviceObservation("airpods", "AirPods", DeviceKind.Headphones, "Bluetooth",
+        LinkState.Disconnected, 60, true, "Nearby broadcast", "Apple BLE battery advertisement",
+        CurrentBatteryIsEstimated: true, BatteryComponents: components);
+    var state = Merge(null, observation);
+    Require(state.Connection == LinkState.Disconnected && !state.IsLive && state.BatteryPercent == 60
+        && state.BatteryIsEstimated && state.LastSeenUtc == now && state.BatteryComponents == components,
+        "Nearby AirPods battery was discarded or shown as connected/live");
+});
+Check("AirPods last reading and components survive later disconnect observations", () =>
+{
+    var components = new BatteryComponents(60, 60, 60, true, false, false, SeenUtc: now);
+    var observation = new DeviceObservation("airpods", "AirPods", DeviceKind.Headphones, "Bluetooth",
+        LinkState.Disconnected, 60, true, "Nearby broadcast", "Apple BLE battery advertisement",
+        CurrentBatteryIsEstimated: true, BatteryComponents: components);
+    var first = Merge(null, observation);
+    var later = Merge(first, new DeviceObservation("airpods", "AirPods", DeviceKind.Headphones, "Bluetooth",
+        LinkState.Disconnected, null, null, "No fresh broadcast", "Apple BLE battery advertisement"));
+    var restored = JsonSerializer.Deserialize<DeviceSnapshot>(JsonSerializer.Serialize(later))!;
+    Require(later.BatteryPercent == 60 && later.BatteryComponents == components && !later.IsLive
+        && later.LastSeenUtc == now, "AirPods offline cache changed after a later scan");
+    Require(restored.BatteryPercent == 60 && restored.BatteryComponents == components,
+        "AirPods component cache did not survive JSON persistence");
 });
 
 var failed = 0;

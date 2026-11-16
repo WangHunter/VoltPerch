@@ -1,4 +1,4 @@
-VoltPerch 0.2.0
+VoltPerch 0.3.0
 Peripheral battery monitoring for Windows
 https://github.com/WangHunter/VoltPerch
 
@@ -38,8 +38,13 @@ Model-specific queries are implemented for VGN V98pro V2 and SteelSeries
 Rival 650. Rival 650 wireless receiver behavior still needs hardware verification.
 Xbox controllers use Windows.Gaming.Input estimates or XInput battery levels.
 Classic Bluetooth battery values depend on Windows exposing a usable property;
-this channel has been exercised with JBL TUNE760NC. BLE/GATT battery reads,
-separate earbud/case values and other proprietary receivers are not implemented.
+this channel has been exercised with JBL TUNE760NC. AirPods left, right and case
+levels are displayed separately in the device and tray lists. Nearby Bluetooth LE
+advertisements report approximately 10% resolution. Keep the case open or take the
+earbuds out. The strongest recent
+nearby signal is used because these broadcasts have no stable device identity.
+Other generic BLE/GATT battery services and proprietary receiver protocols are
+not implemented.
 See README.md for the full compatibility table and verification limits.
 
 REMOVE AND RESTORE

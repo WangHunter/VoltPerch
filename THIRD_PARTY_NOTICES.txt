@@ -24,7 +24,13 @@ official product of these projects or of the device manufacturers.
    Relevant source: rivalcfg/devices/rival650.py
    License: WTFPL version 2; full upstream license in licenses/rivalcfg-WTFPL.txt.
 
-4. Microsoft .NET runtime and Windows Desktop runtime
+4. PodBattery — hammad20120
+   https://github.com/hammad20120/PodBattery
+   Relevant reference: AirPods BLE battery advertisement format and nearby-signal
+   matching limitations. License: MIT (see the upstream LICENSE file).
+   No PodBattery source files or UI assets are included in VoltPerch.
+
+5. Microsoft .NET runtime and Windows Desktop runtime
    The self-contained Windows x64 distribution includes Microsoft .NET runtime
    components. VoltPerch does not claim authorship of these components.
    https://github.com/dotnet/runtime
@@ -48,7 +54,7 @@ packaged as a multi-resolution Windows icon. Its prompt and source artwork are
 included in src/BatteryDesk/Assets. The tray symbol is drawn from live state in
 code; it is not a manufacturer logo or a copied upstream UI asset.
 
-5. Microsoft Windows SDK for .NET
+6. Microsoft Windows SDK for .NET
    Windows.Gaming.Input projection and WinRT support from
    Microsoft.Windows.SDK.NET.Ref version 10.0.19041.57.
    Package: https://www.nuget.org/packages/Microsoft.Windows.SDK.NET.Ref/10.0.19041.57

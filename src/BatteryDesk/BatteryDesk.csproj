@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>VoltPerch</AssemblyName>
     <RootNamespace>BatteryDesk</RootNamespace>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Product>VoltPerch</Product>
     <Title>VoltPerch</Title>
     <Description>A lightweight Windows peripheral battery monitor.</Description>

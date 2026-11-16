@@ -18,12 +18,16 @@ public static class StatePolicy
             var validPercent = observation.CurrentBattery is >= 0 and <= 100;
             var validLevel = observation.CurrentBatteryLevel is BatteryLevel level && Enum.IsDefined(level);
             var valid = observation.Connection == LinkState.Connected && (validPercent || validLevel);
+            var nearbyAirPodsReading = observation.Connection == LinkState.Disconnected
+                && observation.BatteryComponents is not null && validPercent;
+            var acceptReading = valid || nearbyAirPodsReading;
             cache[observation.Id] = new(observation.Id, observation.Name, observation.Kind, observation.Transport,
-                observation.Connection, valid ? (validPercent ? observation.CurrentBattery : null) : old?.BatteryPercent,
-                valid ? observation.IsCharging : null, valid, valid ? now : old?.LastSeenUtc,
+                observation.Connection, acceptReading ? (validPercent ? observation.CurrentBattery : null) : old?.BatteryPercent,
+                acceptReading ? observation.IsCharging : null, valid, acceptReading ? now : old?.LastSeenUtc,
                 observation.Message, observation.Provider,
-                valid ? (validPercent ? null : observation.CurrentBatteryLevel) : old?.BatteryLevel,
-                valid ? validPercent && observation.CurrentBatteryIsEstimated : old?.BatteryIsEstimated ?? false);
+                acceptReading ? (validPercent ? null : observation.CurrentBatteryLevel) : old?.BatteryLevel,
+                acceptReading ? validPercent && observation.CurrentBatteryIsEstimated : old?.BatteryIsEstimated ?? false,
+                observation.BatteryComponents ?? old?.BatteryComponents);
         }
         foreach (var id in cache.Keys.Where(id => !seen.Contains(id)).ToArray())
             cache[id] = cache[id] with { Connection = LinkState.Disconnected, IsLive = false, IsCharging = null,

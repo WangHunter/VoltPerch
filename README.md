@@ -17,6 +17,7 @@ VoltPerch brings supported keyboards, mice, controllers and Bluetooth devices in
 ## Features
 
 - Connection status, battery readings and charging information where the device exposes them.
+- AirPods left, right and case readings shown separately in the device list and tray panel, where available, at approximately 10% resolution. The detail summary uses the lower earbud value.
 - A compact tray panel that shows connected devices first, with an option to show all devices.
 - A transparent battery-only tray icon with automatic device selection and an optional pinned device. Percentages appear in the device list, never on the tray icon.
 - Last-known battery readings after disconnection, with an explicit not-live label.
@@ -32,6 +33,7 @@ VoltPerch saves the latest valid reading for each device. It does not record bat
 
 - Windows 10 version 2004 or later, or Windows 11.
 - An x64 PC with the relevant device drivers installed.
+- AirPods advertisement reading requires a Bluetooth LE-capable adapter and a nearby battery broadcast.
 - A supported device and connection mode. Bluetooth support depends on what Windows and the device report.
 
 Portable release builds include the .NET runtime. You do not need to install a separate runtime or SDK to use them.
@@ -48,8 +50,9 @@ Support is specific to a device, firmware and connection mode. This is not a com
 | Xbox controllers through Windows.Gaming.Input | Per-controller battery reports and multiple-controller display | Capacity ratios are labeled as system estimates, not exact percentages measured by the controller. Receiver mode has been exercised; controlled power-off/reconnect testing remains incomplete. |
 | Xbox controllers through XInput | Coarse Empty / Low / Medium / Full battery levels as a fallback | These levels are never silently converted into exact percentages. Ambiguous device identity remains unconfirmed. USB power alone does not prove charging or a full battery. |
 | Classic Bluetooth devices with a Windows battery property | Windows connection information and the battery value associated with the device, including HFP service nodes | Availability and freshness depend on Windows and the device. The value is Windows' last report; there is no dependable device sampling timestamp. This path has been exercised with JBL TUNE760NC. |
+| AirPods BLE proximity-pairing battery advertisements | Left earbud, right earbud and case levels, plus charging flags when present | Exercised with one AirPods pair. Broadcast levels use roughly 10% steps and have no stable device identity; the strongest recent nearby signal is used, so another pair can be matched by mistake. Keep the case open or take the earbuds out to prompt a broadcast. Disconnected readings are retained and marked as not live. |
 | Other classic Bluetooth devices | Known devices can appear with their connection state | A connected device may expose no usable battery value. |
-| BLE/GATT battery service, separate earbud/case readings, other proprietary 2.4 GHz protocols | Not implemented | A generic Bluetooth listing does not imply battery support for these channels. |
+| Generic BLE/GATT battery services and other proprietary 2.4 GHz protocols | Not implemented | AirPods proximity-pairing advertisements are a specific supported format; they do not imply support for arbitrary BLE services or receiver protocols. |
 
 Automated checks validate parsing, state transitions and display rules. They do not establish compatibility with hardware that has not been exercised. To request another device, use the [device support form](https://github.com/WangHunter/VoltPerch/issues/new?template=device_support.yml).
 
@@ -72,6 +75,7 @@ Open **Settings > General > Language** to choose English or Simplified Chinese. 
 - Disconnected devices retain their last valid reading, clearly marked as not live.
 - A receiver being present does not by itself make its peripheral connected.
 - Some sleeping devices must be awakened before a new reading is possible.
+- AirPods broadcasts are approximate and may be collected while the headphones are connected to another device. The strongest recent nearby AirPods signal is used because the broadcast does not provide a stable identity.
 
 Click a device for connection, transport, reading and support details. The tray panel opens with connected devices only; **Show all** includes offline and unconfirmed devices. Hovering over the tray icon does not show a device tooltip.
 

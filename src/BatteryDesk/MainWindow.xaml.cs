@@ -80,7 +80,9 @@ public partial class MainWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(72) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         if (!narrow) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(narrow ? 146 : 176) });
+        bool showComponents = UiHelpers.HasSeparateAirPodsComponents(device);
+        double batteryWidth = showComponents ? (narrow ? 224 : 236) : (narrow ? 146 : 176);
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(batteryWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
         grid.Children.Add(UiHelpers.Icon(device.Kind,56,device.Name));
         var name = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,12,0) };
@@ -89,14 +91,23 @@ public partial class MainWindow : Window
         if (narrow) { var line = ConnectionLine(device); line.Margin = new Thickness(0,7,0,0); name.Children.Add(line); }
         Grid.SetColumn(name,1); grid.Children.Add(name);
         if (!narrow) { var connection = ConnectionLine(device); connection.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(connection,2); grid.Children.Add(connection); }
-        var battery = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, MaxWidth = narrow ? 145 : 175 };
-        var number = UiHelpers.Text(UiHelpers.BatteryText(device), 29, !device.IsLive ? "MutedBrush" : UiHelpers.Low(device,_monitor.Settings) ? "LowBrush" : "TextBrush"); number.HorizontalAlignment = HorizontalAlignment.Right; battery.Children.Add(number);
-        var caption = UiHelpers.Text(UiHelpers.BatteryCaption(device,_monitor.Settings), 12, UiHelpers.Low(device,_monitor.Settings) ? "LowBrush" : "MutedBrush"); caption.TextAlignment = TextAlignment.Right; caption.Margin = new Thickness(0,3,0,0); battery.Children.Add(caption);
+        UIElement battery;
+        if (showComponents)
+        {
+            battery = UiHelpers.AirPodsComponentPanel(device, batteryWidth, 11, 14, 9, 10, _monitor.Settings);
+        }
+        else
+        {
+            var summary = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, MaxWidth = batteryWidth - 1 };
+            var number = UiHelpers.Text(UiHelpers.BatteryText(device), 29, !device.IsLive ? "MutedBrush" : UiHelpers.Low(device,_monitor.Settings) ? "LowBrush" : "TextBrush"); number.HorizontalAlignment = HorizontalAlignment.Right; summary.Children.Add(number);
+            var caption = UiHelpers.Text(UiHelpers.BatteryCaption(device,_monitor.Settings), 12, UiHelpers.Low(device,_monitor.Settings) ? "LowBrush" : "MutedBrush"); caption.TextAlignment = TextAlignment.Right; caption.Margin = new Thickness(0,3,0,0); summary.Children.Add(caption);
+            battery = summary;
+        }
         Grid.SetColumn(battery,grid.ColumnDefinitions.Count-2); grid.Children.Add(battery);
         var chevron=UiHelpers.Text("›",24,"MutedBrush");chevron.VerticalAlignment=VerticalAlignment.Center;chevron.HorizontalAlignment=HorizontalAlignment.Right;Grid.SetColumn(chevron,grid.ColumnDefinitions.Count-1);grid.Children.Add(chevron);
         var button = new Button { Content=grid, Style=(Style)FindResource("RowButton"), Tag=device.Id };
         if (device.Id == _selectedId) button.SetResourceReference(BackgroundProperty,"HoverBrush");
-        AutomationProperties.SetName(button, UiHelpers.T("{0}, {1}, {2}, {3}, {4}",UiHelpers.DeviceName(device),UiHelpers.ConnectionText(device),Localizer.Translate(device.Transport),UiHelpers.BatteryText(device),UiHelpers.BatteryCaption(device,_monitor.Settings)));
+        AutomationProperties.SetName(button, UiHelpers.T("{0}, {1}, {2}, {3}",UiHelpers.DeviceName(device),UiHelpers.ConnectionText(device),Localizer.Translate(device.Transport),UiHelpers.BatteryAccessibilityText(device,_monitor.Settings)));
         button.Click += (_,_) => ShowDevice(device.Id);
         var menu = new ContextMenu { Style = (Style)FindResource("DeviceContextMenu") };
         var removeItem = new MenuItem { Header = UiHelpers.T("Remove device"), Style = (Style)FindResource("DeviceContextMenuItem") };
@@ -148,14 +159,42 @@ public partial class MainWindow : Window
         DetailsContent.Children.Clear(); if(d==null)return;
         var icon=UiHelpers.Icon(d.Kind,64,d.Name);icon.HorizontalAlignment=HorizontalAlignment.Left;DetailsContent.Children.Add(icon);
         var name=UiHelpers.Text(UiHelpers.DeviceName(d),20);name.FontWeight=FontWeights.SemiBold;name.Margin=new Thickness(0,16,0,0);DetailsContent.Children.Add(name);
-        var value=UiHelpers.Text(UiHelpers.BatteryText(d),43,!d.IsLive?"MutedBrush":UiHelpers.Low(d,_monitor.Settings)?"LowBrush":"TextBrush");value.Margin=new Thickness(0,14,0,0);DetailsContent.Children.Add(value);
+        if (UiHelpers.HasSeparateAirPodsComponents(d))
+        {
+            var summaryLabel=UiHelpers.Text(UiHelpers.T("Lowest earbud"),13,"MutedBrush");summaryLabel.Margin=new Thickness(0,14,0,0);DetailsContent.Children.Add(summaryLabel);
+        }
+        var value=UiHelpers.Text(UiHelpers.BatteryText(d),43,!d.IsLive?"MutedBrush":UiHelpers.Low(d,_monitor.Settings)?"LowBrush":"TextBrush");value.Margin=new Thickness(0,UiHelpers.HasSeparateAirPodsComponents(d)?2:14,0,0);DetailsContent.Children.Add(value);
         DetailsContent.Children.Add(UiHelpers.Text(UiHelpers.BatteryCaption(d,_monitor.Settings),14,"MutedBrush"));
         DetailsContent.Children.Add(Divider());
         DetailsContent.Children.Add(InfoRow(UiHelpers.T("Connection"),UiHelpers.ConnectionText(d)));
         DetailsContent.Children.Add(InfoRow(UiHelpers.T("Transport"),d.Transport));
-        DetailsContent.Children.Add(InfoRow(UiHelpers.T("Reading"),d.IsLive?UiHelpers.T("Current reading"):UiHelpers.T("Not live / no valid reading")));
-        if (d.BatteryIsEstimated) DetailsContent.Children.Add(InfoRow(UiHelpers.T("Accuracy"),UiHelpers.T("System estimate, not an exact percentage")));
+        var readingStatus = !d.IsLive && d.Connection == LinkState.Disconnected && UiHelpers.HasRecentAirPodsBroadcast(d)
+            ? UiHelpers.T("Nearby broadcast; connection to this PC is not confirmed")
+            : d.IsLive ? UiHelpers.T("Current reading") : UiHelpers.T("Not live / no valid reading");
+        DetailsContent.Children.Add(InfoRow(UiHelpers.T("Reading"),readingStatus));
+        if (d.BatteryComponents is not null)
+            DetailsContent.Children.Add(InfoRow(UiHelpers.T("Accuracy"),UiHelpers.T("AirPods broadcast, approx. 10% steps")));
+        else if (d.BatteryIsEstimated)
+            DetailsContent.Children.Add(InfoRow(UiHelpers.T("Accuracy"),UiHelpers.T("System estimate, not an exact percentage")));
         DetailsContent.Children.Add(InfoRow(UiHelpers.T("Last read"),d.LastSeenUtc?.ToLocalTime().ToString("MM-dd HH:mm:ss")??UiHelpers.T("No reading yet")));
+        if (d.BatteryComponents is { } components)
+        {
+            DetailsContent.Children.Add(Divider());
+            var componentHeading=UiHelpers.Text(UiHelpers.T("AirPods battery components"),16);componentHeading.FontWeight=FontWeights.SemiBold;DetailsContent.Children.Add(componentHeading);
+            bool componentsFresh=UiHelpers.HasRecentAirPodsBroadcast(d);
+            if (components.SingleBattery)
+                DetailsContent.Children.Add(InfoRow(UiHelpers.T("Headphone battery"),UiHelpers.BatteryComponentText(components.Left,components.LeftCharging,componentsFresh)));
+            else
+            {
+                DetailsContent.Children.Add(InfoRow(UiHelpers.T("Left earbud"),UiHelpers.BatteryComponentText(components.Left,components.LeftCharging,componentsFresh)));
+                DetailsContent.Children.Add(InfoRow(UiHelpers.T("Right earbud"),UiHelpers.BatteryComponentText(components.Right,components.RightCharging,componentsFresh)));
+                DetailsContent.Children.Add(InfoRow(UiHelpers.T("Charging case"),UiHelpers.BatteryComponentText(components.Case,components.CaseCharging,componentsFresh)));
+            }
+            if(components.SeenUtc is DateTimeOffset seen)
+                DetailsContent.Children.Add(InfoRow(UiHelpers.T("Last broadcast"),seen.ToLocalTime().ToString("MM-dd HH:mm:ss")));
+            var note=UiHelpers.Text(UiHelpers.T("AirPods broadcasts use approximate 10% steps and have no stable device identity. The strongest nearby AirPods signal is used; another pair nearby can be matched by mistake."),12,"MutedBrush");
+            note.Margin=new Thickness(0,8,0,0);DetailsContent.Children.Add(note);
+        }
         if(!string.IsNullOrWhiteSpace(d.Message)) {var message=UiHelpers.Text(d.Message,13,"MutedBrush");message.Margin=new Thickness(0,8,0,0);DetailsContent.Children.Add(message);}
         DetailsContent.Children.Add(Divider());
         var heading=UiHelpers.Text(UiHelpers.T("Device preferences"),16);heading.FontWeight=FontWeights.SemiBold;DetailsContent.Children.Add(heading);

@@ -550,6 +550,19 @@ Check("Persisted identities survive restart with first device absent", () =>
     Require(restored.Resolve("keyboard", Endpoint("path-b")) == bId, "Restart reassigned remaining device");
     Require(restored.Resolve("keyboard", Endpoint("path-c")) != "keyboard", "Restart reused removed device's legacy ID");
 });
+Check("Rebuilding a missing VGN port assignment respects the saved merge immediately", () =>
+{
+    const string family = EndpointIdentityMap.VgnKeyboardId;
+    var identities = new EndpointIdentityMap();
+    identities.Resolve(family, Endpoint("current-port"));
+    var oldId = identities.Resolve(family, Endpoint("old-port"));
+    identities.MergeVgn(oldId, family);
+    var recovered = new EndpointIdentityMap(identities.Assignments
+        .Where(pair => pair.Key != family + "|path:OLD-PORT").ToDictionary());
+    Require(recovered.Resolve(family, Endpoint("old-port")) == family
+        && recovered.Resolve(family, Endpoint("old-port")) == family,
+        "Rebuilding the port assignment returned an obsolete device ID");
+});
 Check("Usable serial preserves identity across USB path changes", () =>
 {
     var identities = new EndpointIdentityMap();

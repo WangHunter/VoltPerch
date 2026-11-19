@@ -50,7 +50,7 @@ internal static class WgiMonitorChecks
         using (var monitor = new DeviceMonitor(directory))
         {
             await monitor.RefreshAsync();
-            Check(excludedMicrosoft && monitor.Devices.Count(d => d.Id == firstId) == 1
+            Check(excludedMicrosoft && !XInputProvider.AllowSlotMatch && monitor.Devices.Count(d => d.Id == firstId) == 1
                 && monitor.Devices.Single(d => d.Id == firstId) is { IsLive: true, BatteryPercent: 71, BatteryIsEstimated: true }
                 && monitor.Devices.Single(d => d.Id == "xinput:other-vendor").IsLive,
                 "WGI takes over Microsoft controllers without duplicate legacy rows and keeps other vendors");

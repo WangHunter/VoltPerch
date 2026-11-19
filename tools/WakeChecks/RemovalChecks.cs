@@ -108,6 +108,53 @@ internal static class RemovalChecks
             Check(monitor.Devices.Count == 0 && monitor.RemovedDevices.Single().Id == keyboardId,
                 "an in-flight reading cannot resurrect a device after removal");
         }
+        var mergeDirectory = Path.Combine(testRoot, "merge-keyboard");
+        Directory.CreateDirectory(mergeDirectory);
+        var oldPort = new HidEndpoint("old-port", 0x320f, 0x5088);
+        var newPort = new HidEndpoint("new-port", 0x320f, 0x5088);
+        var otherKeyboard = new HidEndpoint("another-keyboard", 0x320f, 0x5088);
+        var map = new EndpointIdentityMap();
+        var oldId = map.Resolve(keyboardId, oldPort);
+        var newId = map.Resolve(keyboardId, newPort);
+        var otherId = map.Resolve(keyboardId, otherKeyboard);
+        Save(mergeDirectory, "identities.json", map.Assignments);
+        TargetHidProvider.Read = () => Task.FromResult<IReadOnlyList<DeviceObservation>>([Observation(oldId, 76)]);
+        using (var monitor = new DeviceMonitor(mergeDirectory))
+        {
+            await monitor.RefreshAsync();
+            monitor.Settings.SelectedDeviceId = oldId;
+            TargetHidProvider.Read = () => Task.FromResult<IReadOnlyList<DeviceObservation>>([Observation(newId, 18), Observation(otherId, 55)]);
+            await monitor.RefreshAsync();
+            var beforeMerge = monitor.Devices.ToArray();
+            Check(beforeMerge.Single(d => d.Id == oldId) is { Connection: LinkState.Disconnected, BatteryPercent: 76 }
+                && beforeMerge.Single(d => d.Id == newId) is { IsLive: true, BatteryPercent: 18 },
+                "new receiver path reproduces a live and a cached VGN row");
+            Check(!DeviceMonitor.CanMergeKeyboard(beforeMerge.Single(d => d.Id == otherId), beforeMerge.Single(d => d.Id == newId)),
+                "two connected same-model keyboards cannot be merged");
+            await monitor.MergeKeyboardAsync(oldId, newId);
+            Check(monitor.Devices.Count == 2 && monitor.Devices.Single(d => d.Id == newId) is { IsLive: true, BatteryPercent: 18 }
+                && monitor.Devices.Single(d => d.Id == otherId).BatteryPercent == 55 && monitor.Settings.SelectedDeviceId == newId,
+                "confirmed merge keeps the live reading, tray pin and independent keyboard");
+            Check(!Load<Dictionary<string, AlertMemory>>(mergeDirectory, "alerts.json").ContainsKey(oldId),
+                "merged alias no longer has a separate alert history");
+
+            // Model a restart after writing the alias but before saving the cleaned cache and selection.
+            Save(mergeDirectory, "devices.json", beforeMerge);
+            Save(mergeDirectory, "settings.json", new AppSettings { SelectedDeviceId = oldId });
+        }
+        var mergedMap = new EndpointIdentityMap(Load<Dictionary<string, string>>(mergeDirectory, "identities.json"));
+        Check(mergedMap.Resolve(keyboardId, oldPort) == newId && mergedMap.Resolve(keyboardId, newPort) == newId
+            && mergedMap.Resolve(keyboardId, otherKeyboard) == otherId,
+            "both known ports resolve to the same ID after restart, with other devices distinct");
+        using (var monitor = new DeviceMonitor(mergeDirectory))
+        {
+            Check(monitor.Devices.Count == 2 && monitor.Devices.Single(d => d.Id == newId) is { IsLive: false, BatteryPercent: 18 }
+                && monitor.Settings.SelectedDeviceId == newId, "restart reconciles old cache and pin without treating the saved reading as live");
+            TargetHidProvider.Read = () => Task.FromResult<IReadOnlyList<DeviceObservation>>([Observation(mergedMap.Resolve(keyboardId, oldPort), 64)]);
+            await monitor.RefreshAsync();
+            Check(monitor.Devices.Count == 2 && monitor.Devices.Single(d => d.Id == newId) is { IsLive: true, BatteryPercent: 64 },
+                "using the old port updates the merged row");
+        }
         TargetHidProvider.Read = () => Task.FromResult<IReadOnlyList<DeviceObservation>>([]);
         return passed;
     }

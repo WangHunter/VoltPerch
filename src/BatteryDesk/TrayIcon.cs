@@ -70,8 +70,11 @@ public sealed class TrayIcon : IDisposable
                 menu.Items.Add(Localizer.T("Refresh now"), null, (_, _) => RefreshRequested?.Invoke());
                 menu.Items.Add(Localizer.T("Settings"), null, (_, _) => SettingsRequested?.Invoke());
                 menu.Items.Add(new Forms.ToolStripSeparator());
-                menu.Items.Add(Localizer.T("Exit"), null, (_, _) => ExitRequested?.Invoke());
-                menu.Closed += (_, _) => menu.Dispose();
+                var dispatcher = _source.Dispatcher;
+                // WinForms still uses the menu handle after Closed fires during an item click.
+                menu.Closed += (_, _) => dispatcher.BeginInvoke(new Action(menu.Dispose));
+                menu.Items.Add(Localizer.T("Exit"), null, (_, _) =>
+                    dispatcher.BeginInvoke(new Action(() => ExitRequested?.Invoke())));
                 SetForegroundWindow(_source.Handle);
                 menu.Show(Forms.Cursor.Position);
                 break;

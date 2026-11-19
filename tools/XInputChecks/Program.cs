@@ -81,6 +81,13 @@ Check("Multiple HID candidates remain ambiguous with only one active slot", () =
         "Ambiguous physical identity assigned a slot reading");
     Require(rows.Select(r => r.Id).Distinct().Count() == 2, "Different candidates shared identity");
 });
+Check("A slot belonging to a WGI controller cannot be assigned to a remaining receiver", () =>
+{
+    var receiverEndpoint = pad with { VendorId = 0x1234, Product = "Third-party controller" };
+    var row = XInputProvider.BuildObservations([receiverEndpoint], Slots(), Identity, allowSlotMatch: false).Single();
+    Require(row.Connection == LinkState.Unknown && row.CurrentBatteryLevel is null,
+        "The remaining receiver received the globally active controller's battery level");
+});
 Check("No candidate never creates an invented physical controller", () =>
     Require(XInputProvider.BuildObservations([], Slots(), Identity).Count == 0, "Slot-only device invented"));
 Check("Unrelated HID keyboards and non-XInput gamepads are excluded", () =>

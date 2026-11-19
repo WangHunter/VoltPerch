@@ -28,7 +28,12 @@ public static class XInputProvider
 {
     public static Func<IReadOnlyList<HidEndpoint>, IReadOnlyList<DeviceObservation>> Query = _ => Array.Empty<DeviceObservation>();
     public static Func<string> ConnectionSignature = () => "0000";
-    public static IReadOnlyList<DeviceObservation> Read(IReadOnlyList<HidEndpoint> endpoints) => Query(endpoints);
+    public static bool AllowSlotMatch { get; private set; }
+    public static IReadOnlyList<DeviceObservation> Read(IReadOnlyList<HidEndpoint> endpoints, bool allowSlotMatch = true)
+    {
+        AllowSlotMatch = allowSlotMatch;
+        return Query(endpoints);
+    }
     public static string GetConnectionSignature() => ConnectionSignature();
 }
 public static class WindowsGamingInputProvider

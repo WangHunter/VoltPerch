@@ -16,28 +16,31 @@ public static class TargetHidProvider
         var keyboards = endpoints.Where(d => d.VendorId == 0x320f && d.ProductId == 0x5088
             && d.Product.Contains("V98pro", StringComparison.OrdinalIgnoreCase)
             && d.UsagePage == 0xff1c && d.Usage == 0x92).OrderBy(d => d.Path).ToArray();
+        var keyboardReadings = new Dictionary<string, DeviceObservation>();
         foreach (var endpoint in keyboards)
         {
-            var id = identities.Resolve("vgn-v98pro-v2", endpoint);
-            var name = id == "vgn-v98pro-v2" ? "VGN V98pro V2" : "VGN V98pro V2 · " + id[^4..];
+            var id = identities.Resolve(EndpointIdentityMap.VgnKeyboardId, endpoint);
+            if (keyboardReadings.TryGetValue(id, out var reading) && reading.Connection == LinkState.Connected) continue;
+            var name = id == EndpointIdentityMap.VgnKeyboardId ? "VGN V98pro V2" : "VGN V98pro V2 · " + id[^4..];
             try
             {
                 // VGN/Weisheng read-only power query. Fixed request is required by this firmware.
                 var raw = await HidNative.QueryAsync(endpoint, [4, 0, 0, 0x1a, 6, 0, 0, 0], timeoutMs: 900);
                 if (TryParseVgn(raw, out var percent, out var charging))
-                    output.Add(new(id, name, DeviceKind.Keyboard, "2.4 GHz receiver", LinkState.Connected, percent, charging,
-                        "Keyboard responded to the battery query", "VGN HID · Verified on this keyboard"));
+                    keyboardReadings[id] = new(id, name, DeviceKind.Keyboard, "2.4 GHz receiver", LinkState.Connected, percent, charging,
+                        "Keyboard responded to the battery query", "VGN HID · Verified on this keyboard");
                 else
-                    output.Add(new(id, name, DeviceKind.Keyboard, "2.4 GHz receiver", LinkState.Unknown, null, null,
+                    keyboardReadings[id] = new(id, name, DeviceKind.Keyboard, "2.4 GHz receiver", LinkState.Unknown, null, null,
                         raw.Length > 3 && raw[3] == 0xff ? "Receiver connected; keyboard is asleep or unresponsive. Press a key, then refresh" : "Receiver connected; battery response is invalid",
-                        "VGN HID · Waiting for a valid device response"));
+                        "VGN HID · Waiting for a valid device response");
             }
             catch (Exception ex) when (ex is IOException or OperationCanceledException or UnauthorizedAccessException)
             {
-                output.Add(new(id, name, DeviceKind.Keyboard, "2.4 GHz receiver", LinkState.Unknown, null, null,
-                    "Receiver connected; keyboard is asleep or unresponsive. Press a key, then refresh", "VGN HID · Battery query failed"));
+                keyboardReadings[id] = new(id, name, DeviceKind.Keyboard, "2.4 GHz receiver", LinkState.Unknown, null, null,
+                    "Receiver connected; keyboard is asleep or unresponsive. Press a key, then refresh", "VGN HID · Battery query failed");
             }
         }
+        output.AddRange(keyboardReadings.Values);
         var mice = endpoints.Where(d => d.VendorId == 0x1038 && d.ProductId is 0x172b or 0x1726
             && d.UsagePage == 0xffc0 && d.Usage == 1).OrderBy(d => d.ProductId == 0x172b ? 0 : 1).ThenBy(d => d.Path).ToArray();
         foreach (var endpoint in mice)

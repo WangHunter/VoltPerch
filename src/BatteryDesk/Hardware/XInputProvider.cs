@@ -12,7 +12,7 @@ public static class XInputProvider
     private const uint DeviceNotConnected = 1167;
     private const string Provider = "Windows XInput · Four battery levels";
 
-    public static IReadOnlyList<DeviceObservation> Read(IReadOnlyList<HidEndpoint> endpoints)
+    public static IReadOnlyList<DeviceObservation> Read(IReadOnlyList<HidEndpoint> endpoints, bool allowSlotMatch = true)
     {
         var candidates = Candidates(endpoints);
         if (candidates.Length == 0) return [];
@@ -33,7 +33,7 @@ public static class XInputProvider
         {
             slots.Clear();
         }
-        return BuildObservations(candidates, slots, ResolveIdentity);
+        return BuildObservations(candidates, slots, ResolveIdentity, allowSlotMatch);
     }
 
     // A controller can switch on/off while its USB receiver remains present. Only query
@@ -55,7 +55,7 @@ public static class XInputProvider
     // Kept separate from native queries so ambiguous identity and stale-data cases can
     // be checked without reading hardware or storing controller button input.
     internal static IReadOnlyList<DeviceObservation> BuildObservations(IReadOnlyList<HidEndpoint> endpoints,
-        IReadOnlyList<SlotReading> slots, Func<HidEndpoint, ControllerIdentity> resolveIdentity)
+        IReadOnlyList<SlotReading> slots, Func<HidEndpoint, ControllerIdentity> resolveIdentity, bool allowSlotMatch = true)
     {
         var candidates = Candidates(endpoints);
         var connected = slots.Where(s => s.StateResult == 0).ToArray();
@@ -81,7 +81,7 @@ public static class XInputProvider
                 connection = LinkState.Disconnected;
                 message = "Controller disconnected; showing the last battery reading as cached";
             }
-            else if (connected.Length != 1 || candidates.Length != 1)
+            else if (!allowSlotMatch || connected.Length != 1 || candidates.Length != 1)
                 message = "Multiple controllers detected; battery readings cannot be matched reliably. Connect one controller and refresh";
             else
             {

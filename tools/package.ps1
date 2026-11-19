@@ -13,11 +13,14 @@ if ($NoRestore) { $publishArgs += '--no-restore' }
 if ($LASTEXITCODE -ne 0) { throw 'Publishing failed' }
 Get-ChildItem -LiteralPath $publish -Filter '*.pdb' -File | Remove-Item
 if (Test-Path -LiteralPath (Join-Path $publish 'data')) { throw 'Refusing to package a directory containing user data' }
-foreach ($name in @('README.txt','README.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.txt')) {
+foreach ($name in @('README.txt','README.md','README.zh-CN.md','CONTRIBUTING.md','CHANGELOG.md','LICENSE','THIRD_PARTY_NOTICES.txt')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $publish -Force
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'licenses') -Destination $publish -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $projectRoot 'src\BatteryDesk\Assets\app.ico') -Destination $publish -Force
+$readmeImageDirectory = Join-Path $publish 'src\BatteryDesk\Assets'
+New-Item -ItemType Directory -Path $readmeImageDirectory -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $projectRoot 'src\BatteryDesk\Assets\app-preview.png') -Destination $readmeImageDirectory -Force
 New-Item -ItemType Directory -Path $release -Force | Out-Null
 $zip = Join-Path $release "VoltPerch-$Version-windows-x64.zip"
 Compress-Archive -Path (Join-Path $publish '*') -DestinationPath $zip -Force

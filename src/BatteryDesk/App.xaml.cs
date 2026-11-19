@@ -43,6 +43,7 @@ public partial class App : Application
             catch (Exception) { MessageBox.Show(Localizer.T("VoltPerch is already running. Open it from the system tray."), "VoltPerch"); }
             Shutdown(); return;
         }
+        if (command == "quit") { Shutdown(); return; }
         try
         {
             _monitor = new DeviceMonitor();

@@ -163,7 +163,7 @@ internal static class UiHelpers
     }
     internal static TextBlock Text(string text, double size = 14, string? brush = null)
     {
-        var block = new TextBlock { Text = Localizer.Translate(text), FontSize = size, TextWrapping = TextWrapping.Wrap };
+        var block = new TextBlock { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap };
         if (brush != null) block.SetResourceReference(TextBlock.ForegroundProperty, brush);
         return block;
     }

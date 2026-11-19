@@ -17,7 +17,7 @@ public sealed class DeviceMonitor : IDisposable
     private readonly object _fileLock = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly Dictionary<string, AlertMemory> _alerts;
-    private readonly EndpointIdentityMap _identities;
+    private EndpointIdentityMap _identities;
     private Task? _loop;
     private int _keyboardRefreshPending;
     private long _nextKeyboardRefreshTick;
@@ -42,14 +42,12 @@ public sealed class DeviceMonitor : IDisposable
         Directory.CreateDirectory(DataDirectory);
         Settings = Read<AppSettings>("settings.json") ?? new();
         NormalizeSettings();
-        RemovedDevices = (Read<List<RemovedDevice>>("removed-devices.json") ?? new()).Where(d => !string.IsNullOrEmpty(d.Id)).DistinctBy(d => d.Id).ToArray();
-        var removedIds = RemovedDevices.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
-        Devices = (Read<List<DeviceSnapshot>>("devices.json") ?? new()).Where(d => !string.IsNullOrEmpty(d.Id) && !removedIds.Contains(d.Id)).DistinctBy(d => d.Id)
+        _identities = new EndpointIdentityMap(Read<Dictionary<string, string>>("identities.json"));
+        RemovedDevices = (Read<List<RemovedDevice>>("removed-devices.json") ?? new()).Where(d => !string.IsNullOrEmpty(d.Id)).ToArray();
+        Devices = (Read<List<DeviceSnapshot>>("devices.json") ?? new()).Where(d => !string.IsNullOrEmpty(d.Id)).DistinctBy(d => d.Id)
             .Select(d => d with { IsLive = false, Connection = LinkState.Unknown, IsCharging = null, Message = "Waiting for connection confirmation; saved reading is not live" }).ToArray();
         _alerts = Read<Dictionary<string, AlertMemory>>("alerts.json") ?? new();
-        foreach (var id in removedIds) _alerts.Remove(id);
-        if (removedIds.Contains(Settings.SelectedDeviceId)) Settings.SelectedDeviceId = "";
-        _identities = new EndpointIdentityMap(Read<Dictionary<string, string>>("identities.json"));
+        ApplyDeviceAliases();
     }
 
     public void Start()
@@ -84,7 +82,7 @@ public sealed class DeviceMonitor : IDisposable
         });
     }
 
-    public Task RefreshAsync() => Task.Run(() => RefreshCoreAsync(null));
+    public Task RefreshAsync() => Task.Run(() => RefreshCoreAsync(null, waitForRefresh: true));
 
     public async Task RemoveDeviceAsync(string id)
     {
@@ -160,6 +158,63 @@ public sealed class DeviceMonitor : IDisposable
         if (restored && !_stop.IsCancellationRequested) await RefreshAsync().ConfigureAwait(false);
     }
 
+    internal static bool CanMergeKeyboard(DeviceSnapshot source, DeviceSnapshot target) =>
+        source.Id != target.Id && EndpointIdentityMap.IsVgnKeyboard(source.Id) && EndpointIdentityMap.IsVgnKeyboard(target.Id)
+        && source.Connection == LinkState.Disconnected && target.Connection == LinkState.Connected;
+
+    public async Task MergeKeyboardAsync(string sourceId, string targetId)
+    {
+        await _refreshGate.WaitAsync(_stop.Token).ConfigureAwait(false);
+        try
+        {
+            _stop.Token.ThrowIfCancellationRequested();
+            var source = Devices.FirstOrDefault(d => d.Id == sourceId);
+            var target = Devices.FirstOrDefault(d => d.Id == targetId);
+            if (source == null || target == null || !CanMergeKeyboard(source, target))
+                throw new InvalidOperationException("These keyboard entries are no longer eligible to merge. Refresh and try again.");
+
+            // Save the alias first. Startup applies it even if writing the other files is interrupted.
+            var identities = new EndpointIdentityMap(new Dictionary<string, string>(_identities.Assignments));
+            identities.MergeVgn(sourceId, targetId);
+            Write("identities.json", identities.Assignments);
+            _identities = identities;
+            ApplyDeviceAliases();
+            Write("devices.json", Devices);
+            Write("alerts.json", _alerts);
+            Write("settings.json", Settings);
+        }
+        finally
+        {
+            _refreshGate.Release();
+            Updated?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void ApplyDeviceAliases()
+    {
+        RemovedDevices = RemovedDevices.Select(d => d with { Id = _identities.CanonicalId(d.Id) }).DistinctBy(d => d.Id).ToArray();
+        var removedIds = RemovedDevices.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+        Devices = Devices.GroupBy(d => _identities.CanonicalId(d.Id)).Where(group => !removedIds.Contains(group.Key))
+            .Select(group =>
+            {
+                var chosen = group.OrderByDescending(d => d.IsLive).ThenByDescending(d => d.LastSeenUtc)
+                    .ThenByDescending(d => d.Id == group.Key).First();
+                var target = group.FirstOrDefault(d => d.Id == group.Key);
+                return chosen with { Id = group.Key, Name = target?.Name ?? chosen.Name };
+            }).ToArray();
+        foreach (var (id, memory) in _alerts.ToArray())
+        {
+            var canonical = _identities.CanonicalId(id);
+            if (id == canonical) continue;
+            if (!_alerts.TryGetValue(canonical, out var current) || memory.LastTime > current.LastTime || current.LastTime == null)
+                _alerts[canonical] = memory;
+            _alerts.Remove(id);
+        }
+        foreach (var id in removedIds) _alerts.Remove(id);
+        var selected = _identities.CanonicalId(Settings.SelectedDeviceId);
+        Settings.SelectedDeviceId = removedIds.Contains(selected) ? "" : selected;
+    }
+
     public void NotifyKeyboardActivity()
     {
         if (_stop.IsCancellationRequested || !KeyboardNeedsRefresh()
@@ -185,10 +240,12 @@ public sealed class DeviceMonitor : IDisposable
 
     private bool KeyboardNeedsRefresh()
     {
-        if (RemovedDevices.Any(d => d.Id == "vgn-v98pro-v2")) return false;
-        var keyboard = Devices.FirstOrDefault(d => d.Id == "vgn-v98pro-v2");
-        return keyboard?.IsLive != true
-            || DateTimeOffset.UtcNow - keyboard.LastSeenUtc.GetValueOrDefault() >= TimeSpan.FromSeconds(Settings.RefreshSeconds);
+        var keyboards = Devices.Where(d => EndpointIdentityMap.IsVgnKeyboard(d.Id)).ToArray();
+        if (keyboards.Length == 0)
+            return !RemovedDevices.Any(d => EndpointIdentityMap.IsVgnKeyboard(d.Id));
+        var cutoff = DateTimeOffset.UtcNow.AddSeconds(-Settings.RefreshSeconds);
+        return keyboards.Any(d => d.Connection != LinkState.Disconnected
+            && (!d.IsLive || d.LastSeenUtc.GetValueOrDefault() <= cutoff));
     }
 
     private static string HidSignature(IReadOnlyList<HidEndpoint> endpoints) =>
@@ -208,9 +265,10 @@ public sealed class DeviceMonitor : IDisposable
     }
 
     private async Task RefreshCoreAsync(IReadOnlyList<HidEndpoint>? endpoints, bool waitForKeyboard = false,
-        (string Hid, string? XInput, string? Wgi, string? AirPods)? sampledConnections = null)
+        (string Hid, string? XInput, string? Wgi, string? AirPods)? sampledConnections = null, bool waitForRefresh = false)
     {
         if (waitForKeyboard) await _refreshGate.WaitAsync(_stop.Token).ConfigureAwait(false);
+        else if (waitForRefresh) await _refreshGate.WaitAsync().ConfigureAwait(false);
         else if (!await _refreshGate.WaitAsync(0).ConfigureAwait(false)) return;
         try
         {
@@ -257,7 +315,10 @@ public sealed class DeviceMonitor : IDisposable
             {
                 var xInputEndpoints = wgiObservations.Count > 0
                     ? endpoints.Where(d => d.VendorId != 0x045e).ToArray() : endpoints;
-                observations.AddRange(XInputProvider.Read(xInputEndpoints).Where(d => observedIds.Add(d.Id)));
+                // XInput slots are global, even when Microsoft HID endpoints are excluded.
+                // A WGI controller can still own the only active slot.
+                observations.AddRange(XInputProvider.Read(xInputEndpoints, allowSlotMatch: wgiObservations.Count == 0)
+                    .Where(d => observedIds.Add(d.Id)));
             }
             catch (Exception ex)
             {
@@ -275,8 +336,17 @@ public sealed class DeviceMonitor : IDisposable
                     observations.Add(new DeviceObservation(device.Id, device.Name, device.Kind, device.Transport,
                         LinkState.Unknown, null, null, "Controller status unavailable: " + failure.Message, device.Provider));
             }
+            string? saveWarning = null;
+            void Persist<T>(string name, T value)
+            {
+                try { Write(name, value); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    saveWarning ??= "Could not save refreshed device data: " + ex.Message;
+                }
+            }
             // WGI may add persistent aliases to an existing XInput ID during this refresh.
-            Write("identities.json", _identities.Assignments);
+            Persist("identities.json", _identities.Assignments);
             var now = DateTimeOffset.UtcNow;
             var removedIds = RemovedDevices.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
             observations.RemoveAll(d => removedIds.Contains(d.Id));
@@ -286,17 +356,18 @@ public sealed class DeviceMonitor : IDisposable
             _lastWgiSignature = connections.Wgi;
             _lastAirPodsSignature = connections.AirPods;
             _lastRefresh = now;
-            Write("devices.json", Devices);
+            Persist("devices.json", Devices);
             var notifications = new List<DeviceSnapshot>();
             foreach (var device in Devices)
             {
                 if (!_alerts.TryGetValue(device.Id, out var memory)) _alerts[device.Id] = memory = new();
                 if (memory.ShouldNotify(device, Settings, now)) notifications.Add(device);
             }
-            Write("alerts.json", _alerts);
+            Persist("alerts.json", _alerts);
             StatusText = $"Updated {now.ToLocalTime():HH:mm:ss} · Auto refresh {Settings.RefreshSeconds}s"
                 + (bluetoothWarning == null ? "" : " · " + bluetoothWarning)
-                + (controllerWarning == null ? "" : " · " + controllerWarning);
+                + (controllerWarning == null ? "" : " · " + controllerWarning)
+                + (saveWarning == null ? "" : " · " + saveWarning);
             if (notifications.Count > 0) LowBattery?.Invoke(this, notifications);
         }
         catch (Exception ex)
@@ -313,21 +384,28 @@ public sealed class DeviceMonitor : IDisposable
         }
     }
 
-    public void SaveSettings()
+    public void SaveSettings(bool updateAutostart = false)
     {
         try
         {
             NormalizeSettings();
             Write("settings.json", Settings);
-            using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
-            if (Settings.StartWithWindows) key.SetValue("VoltPerch", "\"" + Environment.ProcessPath + "\" --tray");
-            else key.DeleteValue("VoltPerch", false);
-            // Migrate only the legacy entry belonging to this installation.
-            if (key.GetValue("BatteryDesk") is string legacy && legacy.Contains(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase))
-                key.DeleteValue("BatteryDesk", false);
+            if (updateAutostart) UpdateAutostart();
         }
         catch (Exception ex) { StatusText = "Could not fully save settings: " + ex.Message; }
         Updated?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void UpdateAutostart()
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
+        var command = "\"" + Environment.ProcessPath + "\" --tray";
+        if (Settings.StartWithWindows) key.SetValue("VoltPerch", command);
+        else if (string.Equals(key.GetValue("VoltPerch") as string, command, StringComparison.OrdinalIgnoreCase))
+            key.DeleteValue("VoltPerch", false);
+        // Migrate only the legacy entry belonging to this installation.
+        if (key.GetValue("BatteryDesk") is string legacy && legacy.Contains(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase))
+            key.DeleteValue("BatteryDesk", false);
     }
     private void NormalizeSettings()
     {
